@@ -39,11 +39,11 @@ Its a Image Processor for PopularGames from 2020-2025, these game feature on nex
 LOGIC SUMMARY...
 1. **Install**  
    - Auto-install Pillow, Requests, texconv.exe.  
-   - Ask for thread count → create data/texConv_N folders with texconv.exe copies.  
+   - Ask for thread count → create data/texConv_N folders with applicable texture conversion tool copies.  
    - Store game path & settings in data/persistent.json.
 2. **Scan**  
    - Read mod load order.  
-   - Extract every texture from game + mods (via TpacToolCli).  
+   - Extract every texture from game + mods (via relating compression tool).  
    - Pick highest-priority version → save mapping to data/texture_database.json.  
    - Backup originals to data/original_textures.
 3. **Process**  
