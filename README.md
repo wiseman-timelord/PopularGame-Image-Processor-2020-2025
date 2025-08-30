@@ -5,6 +5,7 @@ Status: Planning
 Its a Image Processor for PopularGames from 2020-2025, these game feature on nexus, and may at some point include: CyberPunk 2077, Baldurs Gate 3, Mount & Blade 2, Resident Evil 4, Resident Evil Village, Monster Hunter Rise, Witcher 3, Hogwards Legacy. Starting with Bannerlord 2, and possibly finishing wihtout doing them all, but I would likely do more if there is some kind of relating, sponsorship or high endorsement, response(s) (which was not the case with my previous ESP cleaner for Bethesda games, because done in powershell). 
 
 ## Development
+- Progress - Project detailed in a prompt, and handed to Jules.
 - Here are the research notes...
 
 | Game                                | Launch window   | Nexus mods footprint       | Compressed format(s)     | Extraction tool(s)              | Tool package       | Installed footprint | Kept for processor |
