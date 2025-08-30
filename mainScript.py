@@ -30,24 +30,54 @@ def show_main_menu():
     game_data_dir = os.path.join(globals.bannerlord_game_path, 'Data') if globals.bannerlord_game_path else ''
     game_textures_count = count_files(game_data_dir)
 
-    current_setting = globals.config.get('resizing_setting', 'Not Set')
+    resize_setting = globals.config.get('resizing_setting', 'Not Set')
+    format_setting = globals.config.get('format_setting', 'Not Set')
 
     print("Status:")
     print(f"  - Original Textures Stored: {original_count}")
     print(f"  - Processed Textures Stored: {processed_count}")
     print(f"  - Loose Textures in Game Folder: {game_textures_count} (from {game_data_dir or 'N/A'})")
-    print(f"  - Current Resize Setting: {current_setting}")
+    print(f"  - Current Resize Setting: {resize_setting}")
+    print(f"  - Current Format Setting: {format_setting}")
     print("")
 
     display.print_separator('-')
     print("Menu:")
     print("  1) Set Resize Option")
-    print("  2) Process Textures")
-    print("  3) Update Game Folder")
-    print("  4) Revert to Original")
-    print("  5) Re-Scan Textures & Build Database")
+    print("  2) Set Processed Image Format")
+    print("  3) Process Textures")
+    print("  4) Update Game Folder")
+    print("  5) Revert to Original")
+    print("  6) Re-Scan Textures & Build Database")
     print("  X) Exit")
     display.print_separator('-')
+
+def show_format_submenu():
+    """Shows the menu for selecting a DDS compression format."""
+    display.clear_screen()
+    display.print_header("Set Processed Image Format")
+
+    # DXT naming can be confusing. BCn is the modern name.
+    # BC2 = DXT3, BC3 = DXT5.
+    options = {'1': 'BC2', '2': 'BC3', '3': 'BC7'}
+
+    print("Choose the DDS compression format for processed textures:")
+    print("  1) DXT3 / BC2 (Good for sharp alpha, older format)")
+    print("  2) DXT5 / BC3 (Good for smooth alpha, very common)")
+    print("  3) BC7 (Modern, high quality for RGB and RGBA)")
+    print("  B) Back to Main Menu")
+
+    while True:
+        choice = input("Enter your choice: ").strip().upper()
+        if choice in options:
+            format_str = options[choice]
+            processing.save_format_setting(format_str)
+            time.sleep(2)
+            break
+        elif choice == 'B':
+            break
+        else:
+            print("Invalid choice. Please try again.")
 
 def show_resize_submenu():
     """Shows the menu for selecting a texture size limit."""
@@ -99,6 +129,8 @@ def main():
         elif choice == '1':
             show_resize_submenu()
         elif choice == '2':
+            show_format_submenu()
+        elif choice == '3':
             limit = globals.config.get('resizing_setting')
             if not limit:
                 print("No resize setting selected. Please set one using Option 1 first.")
@@ -114,7 +146,7 @@ def main():
 
             processing.process_textures_parallel(limit, num_workers)
             input("\nProcessing complete. Press Enter to return to the main menu.")
-        elif choice == '3':
+        elif choice == '4':
             display.clear_screen()
             display.print_header("Update Game Folder")
             print("WARNING: This will copy processed textures into your game folder,")
@@ -125,7 +157,7 @@ def main():
             else:
                 print("Update cancelled.")
             input("\nPress Enter to return to the main menu.")
-        elif choice == '4':
+        elif choice == '5':
             display.clear_screen()
             display.print_header("Revert to Original")
             print("WARNING: This will revert any processed textures in your game folder")
@@ -136,7 +168,7 @@ def main():
             else:
                 print("Revert cancelled.")
             input("\nPress Enter to return to the main menu.")
-        elif choice == '5':
+        elif choice == '6':
             utilities.run_full_texture_scan()
             input("\nScan complete. Press Enter to return to the main menu.")
         else:
