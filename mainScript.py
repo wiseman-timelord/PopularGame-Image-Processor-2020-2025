@@ -147,14 +147,12 @@ def main():
                 time.sleep(3)
                 continue
 
-            try:
-                default_workers = os.cpu_count()
-                num_workers_str = input(f"Enter number of parallel workers (default: {default_workers}): ").strip()
-                num_workers = int(num_workers_str) if num_workers_str else default_workers
-            except (ValueError, TypeError):
-                num_workers = default_workers
+            if not globals.config.get('texconv_thread_count'):
+                print("Thread count not set. Please run the installer (Option 2 from batch menu) first.")
+                time.sleep(3)
+                continue
 
-            processing.process_textures_parallel(limit, num_workers)
+            processing.process_textures_parallel(limit)
             input("\nProcessing complete. Press Enter to return to the main menu.")
         elif choice == '4':
             display.clear_screen()

@@ -1,16 +1,9 @@
 import os
-import shutil
+import sys
 import json
-import concurrent.futures
-from PIL import Image
+import subprocess
 from tqdm import tqdm
 from . import globals
-
-# This is necessary to enable DDS support in Pillow
-try:
-    from PIL import DdsImagePlugin
-except ImportError:
-    print("WARNING: Pillow-DDS-Plugin not found. DDS file support will be limited.")
 
 def save_format_setting(format_str):
     """
@@ -56,109 +49,73 @@ def save_resize_setting(limit):
     globals.config['resizing_setting'] = limit
     print(f"Resize setting saved: {limit}px")
 
-def resize_image(args):
+def process_textures_parallel(limit):
     """
-    Worker function to resize a single image. Designed to be called by a ProcessPoolExecutor.
-
-    Args:
-        args (tuple): A tuple containing (source_path, output_path, limit, format_str).
-
-    Returns:
-        str: A status message for the processed file.
-    """
-    source_path, output_path, limit, format_str = args
-    try:
-        # Ensure the output directory for the file exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        with Image.open(source_path) as img:
-            # Detect alpha channel
-            has_alpha = img.mode in ('RGBA', 'LA')
-
-            # Smart format selection
-            # The user requested DXT5 (BC3) or BC7 for alpha textures.
-            # BC2 also supports alpha, but BC3 is better for gradients.
-            # We will auto-upgrade to BC3 if a non-alpha format is chosen for an alpha texture.
-            effective_format = format_str
-            if has_alpha and format_str in ['BC1']: # BC1 is DXT1, a common non-alpha format
-                 print(f"INFO: Upgrading {os.path.basename(source_path)} to BC3 due to alpha channel.")
-                 effective_format = 'BC3'
-
-            width, height = img.size
-
-            # Determine if resizing is needed
-            if width > limit or height > limit:
-                ratio = min(limit / width, limit / height)
-                new_width = int(width * ratio)
-                new_height = int(height * ratio)
-
-                # Resize using a high-quality downsampling filter
-                resized_img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-
-                # If the source had no alpha but we are saving to a format that supports it,
-                # we might need to convert the mode. Pillow usually handles this, but being explicit is safer.
-                if not has_alpha and resized_img.mode != 'RGB':
-                    resized_img = resized_img.convert('RGB')
-
-                resized_img.save(output_path, format=effective_format)
-                return f"Resized {os.path.basename(source_path)} to {new_width}x{new_height} ({effective_format})"
-            else:
-                # If not resizing, we still might need to re-compress to the target format.
-                img.save(output_path, format=effective_format)
-                return f"Re-saved {os.path.basename(source_path)} with new format ({effective_format})"
-
-    except Exception as e:
-        return f"ERROR processing {os.path.basename(source_path)}: {e}"
-
-def process_textures_parallel(limit, num_workers):
-    """
-    Processes all textures from the original_textures directory in parallel.
+    Processes all textures from the original_textures directory in parallel
+    by launching multiple instances of the instance.py worker script.
 
     Args:
         limit (int): The maximum dimension (width or height) for the textures.
-        num_workers (int): The number of parallel processes to use.
     """
     source_dir = globals.ORIGINAL_TEXTURES_DIR
     output_dir = globals.PROCESSED_TEXTURES_DIR
 
-    # Get the desired output format from the global config
-    # Default to BC7 for highest quality if not set.
-    format_str = globals.config.get('format_setting', 'BC7')
+    thread_count = globals.config.get('texconv_thread_count', 1)
+    format_str = globals.config.get('format_setting', 'BC7_UNORM') # Default to BC7
 
     if not os.path.exists(source_dir):
         print(f"ERROR: Source directory not found: {source_dir}")
         return
 
-    # Get a list of all files to process
-    tasks = []
-    for filename in os.listdir(source_dir):
-        if filename.lower().endswith(('.dds', '.png', '.tga', '.jpg', '.jpeg')):
-            source_path = os.path.join(source_dir, filename)
-            # All output is .dds
-            output_filename = os.path.splitext(filename)[0] + '.dds'
-            output_path = os.path.join(output_dir, output_filename)
-            tasks.append((source_path, output_path, limit, format_str))
+    all_files = [os.path.join(source_dir, f) for f in os.listdir(source_dir) if f.lower().endswith(('.dds', '.png', 'tga', '.jpg', '.jpeg'))]
 
-    if not tasks:
+    if not all_files:
         print("No textures found in the source directory to process.")
         return
 
-    print(f"\nStarting parallel processing of {len(tasks)} textures with {num_workers} workers...")
+    # Divide the work into chunks for each instance
+    chunks = [all_files[i::thread_count] for i in range(thread_count)]
 
-    # Use ProcessPoolExecutor for true parallelism, bypassing the GIL
-    with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-        # Use tqdm to display a progress bar
-        results = list(tqdm(executor.map(resize_image, tasks), total=len(tasks), desc="Processing Textures"))
+    print(f"\nStarting parallel processing of {len(all_files)} textures with {thread_count} instances...")
+
+    processes = []
+    for i in range(thread_count):
+        instance_num = i + 1
+        file_chunk = chunks[i]
+
+        if not file_chunk:
+            continue
+
+        command = [
+            sys.executable,
+            os.path.join('scripts', 'instance.py'),
+            '--instance-num', str(instance_num),
+            '--limit', str(limit),
+            '--format', format_str,
+            '--output-dir', output_dir,
+            '--files', *file_chunk
+        ]
+
+        # Launch the worker process
+        # We can pipe the output to see real-time progress from workers
+        processes.append(subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True))
+
+    # Monitor the processes
+    with tqdm(total=len(all_files), desc="Processing Textures") as pbar:
+        for p in processes:
+            # You can read stdout line by line for real-time feedback
+            for line in iter(p.stdout.readline, ''):
+                # print(line.strip()) # This would be too verbose, but good for debugging
+                if "SUCCESS" in line or "ERROR" in line:
+                    pbar.update(1)
+            p.wait() # Wait for the process to finish
 
     print("\n--- Processing Complete ---")
-    # Optionally, print a summary of results
-    success_count = sum(1 for r in results if not r.startswith("ERROR"))
-    error_count = len(results) - success_count
-    print(f"Successfully processed: {success_count}")
-    print(f"Failed: {error_count}")
-    if error_count > 0:
-        print("Failures (see details above):")
-        for r in results:
-            if r.startswith("ERROR"):
-                print(f"  - {r}")
+
+    # Check for errors
+    for p in processes:
+        stderr = p.stderr.read()
+        if stderr:
+            print(f"--- Errors from Instance {p.pid} ---\n{stderr.strip()}\n--------------------")
+
     print("--- End of Summary ---")

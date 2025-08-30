@@ -3,6 +3,9 @@ import sys
 import json
 import subprocess
 import winreg
+import shutil
+import requests
+from tqdm import tqdm
 
 # --- UI Functions ---
 
@@ -64,7 +67,7 @@ def save_config(data):
 
 def install_dependencies():
     """Installs required Python packages using pip."""
-    required_packages = {"Pillow", "Pillow-DDS-Plugin", "tqdm"}
+    required_packages = {"Pillow", "Pillow-DDS-Plugin", "tqdm", "requests"}
     print(f"Checking and installing required packages: {', '.join(required_packages)}")
     try:
         # Using sys.executable to ensure we use the pip from the correct Python interpreter
@@ -79,6 +82,57 @@ def install_dependencies():
     except FileNotFoundError:
         print("ERROR: 'pip' command not found. Is Python installed and in your PATH?")
         return False
+
+def download_file(url, target_path):
+    """Downloads a file from a URL to a target path with a progress bar."""
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        total_size = int(response.headers.get('content-length', 0))
+
+        with open(target_path, 'wb') as f, tqdm(
+            desc=os.path.basename(target_path),
+            total=total_size,
+            unit='iB',
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+                bar.update(len(chunk))
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"\nERROR: Failed to download file from {url}. {e}")
+        return False
+
+def setup_texconv_instances():
+    """Asks user for thread count and sets up texconv instances."""
+    while True:
+        try:
+            thread_count_str = input("How many threads to install for the converter (1-6)? ")
+            thread_count = int(thread_count_str)
+            if 1 <= thread_count <= 6:
+                break
+            else:
+                print("Please enter a number between 1 and 6.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+    print(f"Setting up {thread_count} instances for texconv...")
+    save_config({"texconv_thread_count": thread_count})
+
+    default_converter_path = os.path.join('data', 'default_converter', 'texconv.exe')
+    if not os.path.exists(default_converter_path):
+        print("ERROR: texconv.exe not found in the default location. Cannot create instances.")
+        return False
+
+    for i in range(1, thread_count + 1):
+        instance_dir = os.path.join('data', f'texConv_{i}')
+        os.makedirs(instance_dir, exist_ok=True)
+        shutil.copy2(default_converter_path, os.path.join(instance_dir, 'texconv.exe'))
+
+    print("texconv instances created successfully.")
+    return True
 
 # --- Main Execution ---
 
@@ -121,7 +175,32 @@ def main():
         print(f"Then, find 'TpacToolCli.exe' in the downloaded archive and place it in the '{os.path.join(os.getcwd(), 'data')}' directory.")
         results.append(("Find Extraction Tool", "FAIL"))
 
-    # 4. Final Results
+    # 4. Download and Set Up Texture Converter (texconv)
+    print("\nStep 4: Setting up Texture Converter (texconv.exe)...")
+    texconv_url = "https://github.com/Microsoft/DirectXTex/releases/latest/download/texconv.exe"
+    default_converter_dir = os.path.join('data', 'default_converter')
+    os.makedirs(default_converter_dir, exist_ok=True)
+    texconv_path = os.path.join(default_converter_dir, 'texconv.exe')
+
+    if not os.path.exists(texconv_path):
+        print(f"Downloading texconv.exe from {texconv_url}...")
+        if download_file(texconv_url, texconv_path):
+            print("Download successful.")
+            if setup_texconv_instances():
+                results.append(("Setup texconv.exe", "PASS"))
+            else:
+                results.append(("Setup texconv.exe", "FAIL"))
+        else:
+            print("CRITICAL: Failed to download texconv.exe.")
+            results.append(("Setup texconv.exe", "FAIL"))
+    else:
+        print("texconv.exe already exists. Re-running setup for instances.")
+        if setup_texconv_instances():
+            results.append(("Setup texconv.exe", "PASS"))
+        else:
+            results.append(("Setup texconv.exe", "FAIL"))
+
+    # 5. Final Results
     print("\n")
     print_header("Installation Results", width)
 
