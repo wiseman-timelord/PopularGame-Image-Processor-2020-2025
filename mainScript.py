@@ -5,6 +5,8 @@ from scripts import globals
 from scripts import display
 from scripts import utilities
 from scripts import processing
+
+def count_files(directory):
     """
     Counts all files in a given directory.
     Returns 0 if the directory does not exist.
@@ -57,18 +59,22 @@ def show_format_submenu():
     display.clear_screen()
     display.print_header("Set Processed Image Format")
 
+    current_format = globals.config.get('format_setting', 'Not Set')
+    print(f"Current Format Setting: {current_format}")
+    display.print_separator('-')
+
     # DXT naming can be confusing. BCn is the modern name.
     # BC2 = DXT3, BC3 = DXT5.
     options = {'1': 'BC2', '2': 'BC3', '3': 'BC7'}
 
-    print("Choose the DDS compression format for processed textures:")
     print("  1) DXT3 / BC2 (Good for sharp alpha, older format)")
     print("  2) DXT5 / BC3 (Good for smooth alpha, very common)")
     print("  3) BC7 (Modern, high quality for RGB and RGBA)")
-    print("  B) Back to Main Menu")
+
+    display.print_separator('=')
 
     while True:
-        choice = input("Enter your choice: ").strip().upper()
+        choice = input("Enter your choice (Back to Main = B): ").strip().upper()
         if choice in options:
             format_str = options[choice]
             processing.save_format_setting(format_str)
@@ -84,15 +90,19 @@ def show_resize_submenu():
     display.clear_screen()
     display.print_header("Set Texture Resize Limit")
 
+    current_limit = globals.config.get('resizing_setting', 'Not Set')
+    print(f"Current Resize Setting: {current_limit}")
+    display.print_separator('-')
+
     options = {'1': 4096, '2': 2048, '3': 1024, '4': 512}
 
-    print("Choose the maximum texture dimension (width or height):")
     for key, value in options.items():
         print(f"  {key}) Trim textures to {value}x{value}")
-    print("  B) Back to Main Menu")
+
+    display.print_separator('=')
 
     while True:
-        choice = input("Enter your choice: ").strip().upper()
+        choice = input("Enter your choice (Back to Main = B): ").strip().upper()
         if choice in options:
             limit = options[choice]
             processing.save_resize_setting(limit)
@@ -121,7 +131,7 @@ def main():
 
     while True:
         show_main_menu()
-        choice = input("Enter your choice: ").strip().upper()
+        choice = input("Enter your choice (Exit Program = X): ").strip().upper()
 
         if choice == 'X':
             print("Exiting...")
