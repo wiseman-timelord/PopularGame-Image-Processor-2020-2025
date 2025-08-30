@@ -1,0 +1,4 @@
+textures/ui_atlas_1.dds
+textures/some_banner_decal.dds
+items/armors/a_fine_helmet.dds
+items/weapons/a_cool_sword.dds

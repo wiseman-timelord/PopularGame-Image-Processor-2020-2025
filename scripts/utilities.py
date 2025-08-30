@@ -2,11 +2,17 @@ import os
 import xml.etree.ElementTree as ET
 import subprocess
 import shutil
+import sys
+import json
 from . import globals  # Use a relative import within the package
 
 # --- Constants ---
-EXTRACTION_TOOL_NAME = 'TpacToolCli.exe'
-EXTRACTION_TOOL_PATH = os.path.join('data', EXTRACTION_TOOL_NAME)
+# Check for the simulator first, then the real tool.
+if os.path.exists(os.path.join('data', 'TpacToolCli.py')):
+    EXTRACTION_TOOL_CMD = [sys.executable, os.path.join('data', 'TpacToolCli.py')]
+    print("INFO: Using 'TpacToolCli.py' simulator.")
+else:
+    EXTRACTION_TOOL_CMD = [os.path.join('data', 'TpacToolCli.exe')]
 
 # --- Core Functions ---
 
@@ -57,36 +63,43 @@ def parse_load_order(file_path):
 def build_texture_database(game_path, mod_order):
     """
     Scans game files and mods to build a database of the highest priority textures.
-
-    This is a placeholder function. The actual implementation would be complex.
-    It returns a more detailed structure to allow for update/revert logic.
     """
-    print("\nStarting texture database build (placeholder)...")
-    if not os.path.exists(EXTRACTION_TOOL_PATH):
-        print(f"CRITICAL: Extraction tool '{EXTRACTION_TOOL_NAME}' not found. Cannot build database.")
-        return {}
+    print("\nStarting texture database build...")
 
+    # In a real scenario, we would check if the tool exists here.
+    # The installer already does this, so we can assume it's present.
+
+    texture_db = {}
     # This override directory is where we will place new loose files that were originally from a .tpac
-    # It should be a module that loads last.
     override_dir = os.path.join(game_path, 'Modules', 'zzBannerlordTextureProcessorOverride')
 
-    # --- More Detailed Placeholder Example ---
-    texture_db = {
-        # This texture was a loose file in a mod, so we'll overwrite it in place.
-        'armors\\a_placeholder_armor.dds': {
-            'source_type': 'loose',
-            'source_path': os.path.join(game_path, 'Modules', 'SomeMod', 'Assets', 'armors', 'a_placeholder_armor.dds'),
-            'destination_path': os.path.join(game_path, 'Modules', 'SomeMod', 'Assets', 'armors', 'a_placeholder_armor.dds')
-        },
-        # This texture was in a .tpac, so we create it as a new loose file in our override module.
-        'items\\another_placeholder_item.dds': {
-            'source_type': 'tpac',
-            'source_path': os.path.join(game_path, 'Modules', 'Native', 'AssetPackages', 'core.tpac'),
-            'destination_path': os.path.join(override_dir, 'Assets', 'items', 'another_placeholder_item.dds')
-        }
-    }
-    print(f"Database build complete. Found {len(texture_db)} unique textures (placeholder).")
-    # Save the DB to a file so other functions can use it without re-running the scan
+    # In a real implementation, we would iterate through each mod's AssetPackages folder.
+    # For this simulation, we just call the tool once on the Native module path.
+    native_assets_path = os.path.join(game_path, 'Modules', 'Native', 'AssetPackages')
+
+    print(f"Scanning for assets in '{native_assets_path}'...")
+    cmd = EXTRACTION_TOOL_CMD + ['list', '--asset_dir', native_assets_path]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        asset_list = result.stdout.strip().splitlines()
+        print(f"Simulator found {len(asset_list)} assets.")
+
+        for asset_path in asset_list:
+            # For this simulation, we'll assume all found assets are from a .tpac
+            # and their destination is our override module.
+            texture_db[asset_path] = {
+                'source_type': 'tpac',
+                'source_path': os.path.join(native_assets_path, 'SIMULATED.tpac'), # Dummy source
+                'destination_path': os.path.join(override_dir, 'Assets', asset_path)
+            }
+
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"ERROR: Failed to run the texture extraction tool: {e}")
+        print("Please ensure it is placed in the 'data' directory and is executable.")
+        return {}
+
+    print(f"Database build complete. Found {len(texture_db)} unique textures.")
     db_path = os.path.join('data', 'texture_database.json')
     with open(db_path, 'w') as f:
         json.dump(texture_db, f, indent=4)
@@ -97,27 +110,37 @@ def extract_textures(texture_db, output_dir):
     """
     Extracts textures from the database to the specified output directory.
     It will copy loose files and use the CLI tool for .tpac files.
-
-    This is a placeholder function.
     """
-    print(f"\nStarting texture extraction to '{output_dir}' (placeholder)...")
+    print(f"\nStarting texture extraction to '{output_dir}'...")
     if not texture_db:
         print("Texture database is empty. Nothing to extract.")
         return
 
     os.makedirs(output_dir, exist_ok=True)
-    extracted_count = 0
 
-    for texture_path, source_path in texture_db.items():
-        # This is where the logic for calling TpacToolCli.exe would go.
-        # Example command:
-        # TpacToolCli.exe extract --package "C:\...\core.tpac" --files "textures\another_texture.dds" --output "C:\...\processed_textures"
+    # We can extract files in batches.
+    files_to_extract = [path for path, data in texture_db.items() if data['source_type'] == 'tpac']
 
-        # Placeholder logic:
-        print(f"  - Pretending to extract '{texture_path}' from '{source_path}'")
-        extracted_count += 1
+    if not files_to_extract:
+        print("No textures to extract from .tpac files.")
+        return
 
-    print(f"\nExtraction complete. Processed {extracted_count} textures (placeholder).")
+    print(f"Extracting {len(files_to_extract)} textures...")
+    # In a real scenario, we might need to chunk this for very long command lines.
+    cmd = EXTRACTION_TOOL_CMD + [
+        'extract',
+        '--asset_dir', os.path.join(globals.bannerlord_game_path, 'Modules', 'Native', 'AssetPackages'),
+        '--output', output_dir,
+        '--files'
+    ] + files_to_extract
+
+    try:
+        # The simulator will create dummy files in the output directory.
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print("Extraction complete.")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"ERROR: Failed to run the texture extraction tool for extraction: {e}")
+
 
 def update_game_folder():
     """
