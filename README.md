@@ -6,6 +6,7 @@ Its a Image Processor for PopularGames from 2020-2025, these game feature on nex
 
 ## Development
 - Here are the research notes...
+
 | Game                                | Launch window   | Nexus mods footprint       | Compressed format(s)     | Extraction tool(s)              | Tool package       | Installed footprint | Kept for processor |
 | ----------------------------------- | --------------- | -------------------------- | ------------------------ | ------------------------------- | ------------------ | ------------------- | ------------------ |
 | Cyberpunk 2077                      | Dec 2020        | 5 000+ mods / 30 M+ DL     | `.archive` (REDengine 4) | WolvenKit CLI                   | zip (portable)     | ≈ 110 GB            | ✅                  |
